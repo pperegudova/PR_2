@@ -1,11 +1,13 @@
-# Инструмент визуализации графа зависимостей пакетов (Этап 1-2, Вариант 13)
+# Инструмент визуализации графа зависимостей пакетов (Этап 1-3, Вариант 13)
 
 ---
 
 ## 1. Общее описание
 
 Проект представляет собой CLI-приложение (работающее через командную
-строку) для анализа и визуализации графа зависимостей пакетов. На Этапе 2 реализована основная логика получения данных о прямых зависимостях заданного пакета. 
+строку) для анализа и визуализации графа зависимостей пакетов. 
+На Этапе 3 реализовано построение полного графа с учетом транзитивности, его обход и вывод в консоль.
+ 
 
 ### Основные особенности и реализованные требования Этапа 1:
 
@@ -22,6 +24,14 @@
 - Корректный парсинг сырых данных репозитория: извлечение чистых имен пакетов из строк с ограничениями версий и фильтрация опциональных зависимостей (`extra`).
 - Нормализация имен пакетов.
 - Вывод списка прямых зависимостей на экран.
+
+### Основные особенности и реализованные требования Этапа 3:
+- Построение графа: Реализован алгоритм поиска в ширину (BFS, с помощью очереди `collections.deque`).
+- Ограничение глубины: Анализ зависимостей строго ограничен параметром `max_depth`.
+- Пакеты, имя которых содержит заданную пользователем подстроку (`filter_substring`), исключаются из анализа.
+- Алгоритм корректно обрабатывает циклические зависимости, помечая их маркером `(cycle)` и предотвращая бесконечный обход.
+- Вывод построенного графа в консоль в виде ASCII-дерева с использованием символов псевдографики.
+- Поддержка локального файла тестового репозитория, в котором имена пакетов называются большими латинскими буквами.
 
 ---
 
@@ -48,13 +58,18 @@
 - `_parse_dependency_name(dep_string)`: Извлекает чистое имя пакета из строки вида `"urllib3 (<2,>=1.21.1)"` с помощью регулярных выражений и нормализует его.
 - `_fetch_from_pypi(package_name, repo_url)`: Формирует запрос к JSON API репозитория, обрабатывает сетевые ошибки и извлекает массив `requires_dist`.
 - `_fetch_from_file(package_name, file_path)`: Читает зависимости из локального текстового файла формата `имя_пакета: зависимость1, зависимость2`.
-- `get_direct_dependencies(config)`: Главная функция, которая маршрутизирует запрос в зависимости от параметра `test_mode`.
+- `get_direct_dependencies(config, target_package=None)`: Главная функция, которая маршрутизирует запрос в зависимости от параметра `test_mode`.
+
+**Модуль `src/graph_builder.py`:**
+- `build_dependency_graph(config)`: Строит дерево зависимостей итеративным алгоритмом BFS. Использует очередь для обхода, множество `visited` для защиты от циклов и дублирования запросов. Применяет фильтрацию по подстроке и ограничение по глубине.
+
+**Модуль `src/visualizer.py`:**
+- `format_ascii_tree(tree, pkg_name)`: Форматирует полученный словарь-дерево в строку с использованием символов ASCII-псевдографики (`├──`, `└──`, `│`). Циклические зависимости помечаются как `(cycle)`.
 
 **Модуль `src/main.py`:**
 - `print_config(config)`: Выводит все прочитанные параметры в консоль в формате ключ-значение.
 - `print_dependencies(pkg_name, deps)`: Форматирует и выводит список полученных прямых зависимостей.
-- `main()`: Точка входа в приложение. Обрабатывает аргументы командной строки, валидирует конфиг, получает зависимости и перехватывает исключения `ConfigError` и `FetchError`, завершая работу с кодом `1` и сообщением в `stderr`.
-
+- `main()`: Точка входа в приложение. Загружает конфиг, валидирует его, вызывает построение графа, визуализирует результат и перехватывает исключения.
 
 ---
 ## 3. Описание команд для сборки проекта и запуска тестов
@@ -86,26 +101,31 @@ python3 -m unittest discover -s tests
 Содержимое `config.yaml`:
 
 ```yaml
-package_name: "pytest"
+package_name: "boto3"
 source_path: "https://pypi.org/pypi/"
 test_mode: false
-ascii_tree: false
-max_depth: 5
-filter_substring: "urllib"
+ascii_tree: true
+max_depth: 3
+filter_substring: ""
 ```
 
 Результат:
 
 ```bash
-Direct dependencies for 'pytest':
- - colorama
- - exceptiongroup
- - iniconfig
- - packaging
- - pluggy
- - pygments
- - tomli
-----------------------------------------
+Building graph for 'boto3' (depth=3)...
+
+--- Dependency Tree ---
+boto3
+├── botocore
+│   ├── jmespath (cycle)
+│   ├── python-dateutil
+│   │   ├── six
+│   │   └── tzdata
+│   └── urllib3
+├── jmespath
+└── s3transfer
+    └── botocore (cycle)
+-----------------------
 ```
 
 ### 4.2. Успешный запуск (Тестовый режим)
@@ -113,33 +133,40 @@ Direct dependencies for 'pytest':
 Содержимое `config.yaml`:
 
 ```yaml
-package_name: "requests"
-source_path: "tests/test_repo.txt"
+package_name: "PYTEST"
+source_path: "tests/test_repo_stage3.txt"
 test_mode: true
-ascii_tree: false
-max_depth: 5
-filter_substring: "urllib"
+ascii_tree: true
+max_depth: 4
+filter_substring: ""
 ```
 
-Содержимое `test_repo.txt`:
+Содержимое `test_repo_stage3.txt`:
 
 ```yaml
-requests: urllib3, certifi, charset-normalizer, idna
-urllib3:
-certifi:
-charset-normalizer:
-idna:
+PYTEST: PLUGGY, PACKAGING, COLORAMA
+PLUGGY: PACKAGING
+PACKAGING:
+COLORAMA: URLLIB3
+URLLIB3: CERTIFI
+CERTIFI: URLLIB3
 ```
 
 Результат:
 
 ```bash
-Direct dependencies for 'requests':
- - urllib3
- - certifi
- - charset-normalizer
- - idna
-----------------------------------------
+Building graph for 'PYTEST' (depth=4)...
+
+--- Dependency Tree ---
+PYTEST
+├── PLUGGY
+│   └── PACKAGING (cycle)
+├── PACKAGING
+└── COLORAMA
+    └── URLLIB3
+        └── CERTIFI
+            └── URLLIB3 (cycle)
+-----------------------
 ```
 
 ### 4.3. Обработка ошибок конфигурации

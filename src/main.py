@@ -2,7 +2,9 @@
 
 import sys
 from validation import load_yaml, validate_config, ConfigError
-from data_fetcher import get_direct_dependencies, FetchError
+from data_fetcher import FetchError
+from graph_builder import build_dependency_graph
+from visualizer import format_ascii_tree
 
 DEFAULT_CONFIG_PATH = "config.yaml"
 MIN_CLI_ARG_COUNT = 2
@@ -39,8 +41,14 @@ def main() -> None:
         validate_config(raw_config)
 
         pkg = raw_config["package_name"]
-        deps = get_direct_dependencies(raw_config)
-        print_dependencies(pkg, deps)
+        depth = raw_config["max_depth"]
+        print(f"\nBuilding graph for '{pkg}' (depth={depth})...")
+
+        graph = build_dependency_graph(raw_config)
+
+        print("\n--- Dependency Tree ---")
+        print(format_ascii_tree(graph, pkg))
+        print("-----------------------")
 
     except ConfigError as err:
         print(f"Configuration Error: {err}", file=sys.stderr)
@@ -48,7 +56,9 @@ def main() -> None:
     except FetchError as err:
         print(f"Data Fetch Error: {err}", file=sys.stderr)
         sys.exit(1)
-
+    except Exception as err:
+        print(f"Unexpected Error: {err}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

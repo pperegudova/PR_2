@@ -67,16 +67,17 @@ def _fetch_from_file(package_name: str, file_path: str) -> list:
                 deps_str = line.split(':', 1)[1].strip()
                 if not deps_str:
                     return []
-                return [d.strip().lower() for d in deps_str.split(',')]
+                return [d.strip() for d in deps_str.split(',')]
     return []
 
 
-def get_direct_dependencies(config: dict) -> list:
-    """Главная функция получения прямых зависимостей."""
-    pkg_name = config["package_name"].lower().replace('_', '-')
+def get_direct_dependencies(config: dict, target_package: str = None) -> list:
+    """Главная функция получения зависимостей пакета."""
+    pkg_name = target_package or config["package_name"]
+    if not config["test_mode"]:
+        pkg_name = pkg_name.lower().replace('_', '-')
     source_path = config["source_path"]
 
     if config["test_mode"]:
         return _fetch_from_file(pkg_name, source_path)
-
     return _fetch_from_pypi(pkg_name, source_path)
