@@ -32,3 +32,29 @@ def format_load_order(load_order: list) -> str:
         lines.append(f"{i:2d}. {pkg}")
     lines.append("------------------")
     return "\n".join(lines)
+
+
+def format_plantuml(tree: dict, pkg_name: str) -> str:
+    """Форматирует дерево зависимостей в виде текста на языке PlantUML."""
+    lines = ["@startuml"]
+    lines.append(f"' Dependency graph for {pkg_name}'")
+    lines.append("skinparam monochrome true")
+
+    root_children = tree.get(pkg_name, {})
+
+    if not root_children:
+        lines.append(f'"{pkg_name}"')
+    else:
+        def _collect_edges(node: dict, parent: str, visited_edges: set):
+            for child, children_tree in node.items():
+                edge_str = f'"{parent}" --> "{child}"'
+                if edge_str not in visited_edges:
+                    lines.append(edge_str)
+                    visited_edges.add(edge_str)
+
+                if children_tree != CYCLE_MARKER:
+                    _collect_edges(children_tree, child, visited_edges)
+
+        _collect_edges(tree.get(pkg_name, {}), pkg_name, set())
+    lines.append("@enduml")
+    return "\n".join(lines)

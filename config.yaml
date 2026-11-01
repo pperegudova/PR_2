@@ -1,7 +1,7 @@
-package_name: "WEBAPP"
-source_path: "tests/test_repo_stage4.txt"
-test_mode: true
+package_name: "boto3"
+source_path: "https://pypi.org/pypi/"
+test_mode: false
 ascii_tree: true
 max_depth: 6
 filter_substring: ""
-show_load_order: true
+show_load_order: false

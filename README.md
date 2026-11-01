@@ -1,4 +1,4 @@
-# Инструмент визуализации графа зависимостей пакетов (Этапы 1-4, Вариант 13)
+# Инструмент визуализации графа зависимостей пакетов (Этапы 1-5, Вариант 13)
 
 ---
 
@@ -6,7 +6,7 @@
 
 Проект представляет собой CLI-приложение (работающее через командную
 строку) для анализа и визуализации графа зависимостей пакетов. 
-На Этапе 4 реализован режим вывода на экран порядка загрузки зависимостей для заданного пакета.
+На Этапе 5 реализовано формирование текстового представления графа на языке PlantUML, сохранение изображения графа в формате PNG.
  
 
 ### Основные особенности и реализованные требования Этапа 1:
@@ -39,6 +39,13 @@
 - Искусственный «разрыв» циклов: пакеты, участвующие в цикле, помечаются
   `(cycle)`, а зависимые от них пакеты загружаются в обычном порядке.
 - Добавлен параметр конфигурации `show_load_order` для управления выводом.
+
+### Основные особенности и реализованные требования Этапа 5:
+- Формирование текстового представления графа зависимостей на языке диаграмм PlantUML.
+- Вывод описания графа на языке PlantUML на экран.
+- Сохранение изображения графа в файле формата PNG (через публичный API рендеринга Kroki.io).
+- Условный вывод зависимостей в виде ASCII-дерева (управляется параметром `ascii_tree`).
+
 ---
 
 ## 2. Описание всех функций и настроек
@@ -86,10 +93,13 @@
 - `format_ascii_tree(tree, pkg_name)`: Форматирует полученный словарь-дерево в строку с использованием символов ASCII-псевдографики (`├──`, `└──`, `│`). Циклические зависимости помечаются как `(cycle)`.
 - `format_load_order(load_order)`: Форматирует список порядка загрузки в
   виде нумерованного списка.
+- `format_plantuml(tree, pkg_name)`: Формирует текстовое описание графа зависимостей на языке PlantUML со списком уникальных рёбер.
 
 **Модуль `src/main.py`:**
 - `print_config(config)`: Выводит все прочитанные параметры в консоль в формате ключ-значение.
 - `print_dependencies(pkg_name, deps)`: Форматирует и выводит список полученных прямых зависимостей.
+- `_render_graph_outputs(config, graph, pkg_name)`: Координирует вывод всех форматов представления графа.
+- `save_plantuml_as_png(plantuml_text, output_path)`: Сохраняет текст PlantUML в файл PNG через публичный API Kroki.io.
 - `main()`: Точка входа в приложение. Загружает конфиг, валидирует его, вызывает построение графа, визуализирует результат и перехватывает исключения.
 
 ---
@@ -126,14 +136,31 @@ package_name: "boto3"
 source_path: "https://pypi.org/pypi/"
 test_mode: false
 ascii_tree: true
-max_depth: 5
+max_depth: 6
 filter_substring: ""
+show_load_order: false
 ```
 
 Результат:
 
 ```bash
-Building graph for 'boto3' (depth=5)...
+Building graph for 'boto3' (depth=6)...
+[OK] Graph image saved to: graph.png
+
+--- PlantUML Graph Description ---
+@startuml
+' Dependency graph for boto3'
+skinparam monochrome true
+"boto3" --> "botocore"
+"botocore" --> "jmespath"
+"botocore" --> "python-dateutil"
+"python-dateutil" --> "tzdata"
+"botocore" --> "urllib3"
+"boto3" --> "jmespath"
+"boto3" --> "s3transfer"
+"s3transfer" --> "botocore"
+@enduml
+----------------------------------
 
 --- Dependency Tree ---
 boto3
@@ -150,18 +177,10 @@ boto3
         │   └── tzdata
         └── urllib3
 -----------------------
-
-Calculating load order...
---- Load Order ---
- 1. urllib3
- 2. tzdata
- 3. jmespath
- 4. python-dateutil
- 5. botocore
- 6. s3transfer
- 7. boto3
-------------------
 ```
+
+Содержимое `graph.png`:
+![graph.png](graph.png)
 
 ### 4.2. Успешный запуск (Тестовый режим)
 
@@ -174,7 +193,7 @@ test_mode: true
 ascii_tree: true
 max_depth: 6
 filter_substring: ""
-show_load_order: true
+show_load_order: false
 ```
 
 Содержимое `test_repo_stage4.txt`:
@@ -193,6 +212,22 @@ LOOP_B: LOOP_A
 
 ```bash
 Building graph for 'WEBAPP' (depth=6)...
+[OK] Graph image saved to: graph.png
+
+--- PlantUML Graph Description ---
+@startuml
+' Dependency graph for WEBAPP'
+skinparam monochrome true
+"WEBAPP" --> "FRONTEND"
+"FRONTEND" --> "REACT"
+"WEBAPP" --> "BACKEND"
+"BACKEND" --> "NODE"
+"NODE" --> "EXPRESS"
+"EXPRESS" --> "LOOP_A"
+"LOOP_A" --> "LOOP_B"
+"LOOP_B" --> "LOOP_A"
+@enduml
+----------------------------------
 
 --- Dependency Tree ---
 WEBAPP
@@ -205,19 +240,10 @@ WEBAPP
                 └── LOOP_B
                     └── LOOP_A (cycle)
 -----------------------
-
-Calculating load order...
---- Load Order ---
- 1. REACT
- 2. FRONTEND
- 3. LOOP_A (cycle)
- 4. LOOP_B (cycle)
- 5. EXPRESS
- 6. NODE
- 7. BACKEND
- 8. WEBAPP
-------------------
 ```
+
+Содержимое `graph.png`:
+![img.png](img.png)
 
 ### 4.3. Обработка ошибок конфигурации
 
