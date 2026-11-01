@@ -3,8 +3,8 @@
 import sys
 from validation import load_yaml, validate_config, ConfigError
 from data_fetcher import FetchError
-from graph_builder import build_dependency_graph
-from visualizer import format_ascii_tree
+from graph_builder import build_dependency_graph, get_load_order
+from visualizer import format_ascii_tree, format_load_order
 
 DEFAULT_CONFIG_PATH = "config.yaml"
 MIN_CLI_ARG_COUNT = 2
@@ -49,6 +49,11 @@ def main() -> None:
         print("\n--- Dependency Tree ---")
         print(format_ascii_tree(graph, pkg))
         print("-----------------------")
+
+        if raw_config.get("show_load_order", False):
+            print("\nCalculating load order...")
+            load_order = get_load_order(graph, pkg)
+            print(format_load_order(load_order))
 
     except ConfigError as err:
         print(f"Configuration Error: {err}", file=sys.stderr)

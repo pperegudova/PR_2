@@ -1,4 +1,4 @@
-# Инструмент визуализации графа зависимостей пакетов (Этап 1-3, Вариант 13)
+# Инструмент визуализации графа зависимостей пакетов (Этапы 1-4, Вариант 13)
 
 ---
 
@@ -6,7 +6,7 @@
 
 Проект представляет собой CLI-приложение (работающее через командную
 строку) для анализа и визуализации графа зависимостей пакетов. 
-На Этапе 3 реализовано построение полного графа с учетом транзитивности, его обход и вывод в консоль.
+На Этапе 4 реализован режим вывода на экран порядка загрузки зависимостей для заданного пакета.
  
 
 ### Основные особенности и реализованные требования Этапа 1:
@@ -33,6 +33,12 @@
 - Вывод построенного графа в консоль в виде ASCII-дерева с использованием символов псевдографики.
 - Поддержка локального файла тестового репозитория, в котором имена пакетов называются большими латинскими буквами.
 
+### Основные особенности и реализованные требования Этапа 4:
+- Расчёт порядка загрузки зависимостей с использованием алгоритма
+  топологической сортировки (алгоритм Кана).
+- Искусственный «разрыв» циклов: пакеты, участвующие в цикле, помечаются
+  `(cycle)`, а зависимые от них пакеты загружаются в обычном порядке.
+- Добавлен параметр конфигурации `show_load_order` для управления выводом.
 ---
 
 ## 2. Описание всех функций и настроек
@@ -46,6 +52,7 @@
 - `ascii_tree` (bool): Режим вывода зависимостей в формате ASCII-дерева.
 - `max_depth` (int): Максимальная глубина анализа зависимостей (должна быть >= 1).
 - `filter_substring` (str): Подстрока для фильтрации пакетов.
+- `show_load_order` (bool): Вывод порядка загрузки зависимостей.
 
 ### Описание функций
 
@@ -61,10 +68,24 @@
 - `get_direct_dependencies(config, target_package=None)`: Главная функция, которая маршрутизирует запрос в зависимости от параметра `test_mode`.
 
 **Модуль `src/graph_builder.py`:**
-- `build_dependency_graph(config)`: Строит дерево зависимостей итеративным алгоритмом BFS. Использует очередь для обхода, множество `visited` для защиты от циклов и дублирования запросов. Применяет фильтрацию по подстроке и ограничение по глубине.
+- `build_dependency_graph(config)`: Строит дерево зависимостей итеративным алгоритмом BFS. Применяет фильтрацию по подстроке и ограничение по глубине.
+- `_extract_dependencies(tree, pkg_name)`: преобразует дерево в плоский
+  словарь множеств зависимостей.
+- `_collect_all_packages(deps_map)`: Собирает все уникальные пакеты.
+- `_build_graph_metrics(deps_map, all_packages)`: Строит `in_degree` и
+  `reverse_deps` для топологической сортировки.
+- `_topological_sort(in_degree, reverse_deps)`: Выполняет классический
+  алгоритм Кана.
+- `_find_cycle_members(remaining, deps_map)`: Находит пакеты,
+  непосредственно участвующие в цикле.
+- `_break_cycles_and_continue(...)`: Разрывает циклы и продолжает
+  сортировку для оставшихся пакетов.
+- `get_load_order(tree, pkg_name)`: Вычисляет итоговый порядок загрузки.
 
 **Модуль `src/visualizer.py`:**
 - `format_ascii_tree(tree, pkg_name)`: Форматирует полученный словарь-дерево в строку с использованием символов ASCII-псевдографики (`├──`, `└──`, `│`). Циклические зависимости помечаются как `(cycle)`.
+- `format_load_order(load_order)`: Форматирует список порядка загрузки в
+  виде нумерованного списка.
 
 **Модуль `src/main.py`:**
 - `print_config(config)`: Выводит все прочитанные параметры в консоль в формате ключ-значение.
@@ -105,27 +126,41 @@ package_name: "boto3"
 source_path: "https://pypi.org/pypi/"
 test_mode: false
 ascii_tree: true
-max_depth: 3
+max_depth: 5
 filter_substring: ""
 ```
 
 Результат:
 
 ```bash
-Building graph for 'boto3' (depth=3)...
+Building graph for 'boto3' (depth=5)...
 
 --- Dependency Tree ---
 boto3
 ├── botocore
-│   ├── jmespath (cycle)
+│   ├── jmespath
 │   ├── python-dateutil
-│   │   ├── six
 │   │   └── tzdata
 │   └── urllib3
 ├── jmespath
 └── s3transfer
-    └── botocore (cycle)
+    └── botocore
+        ├── jmespath
+        ├── python-dateutil
+        │   └── tzdata
+        └── urllib3
 -----------------------
+
+Calculating load order...
+--- Load Order ---
+ 1. urllib3
+ 2. tzdata
+ 3. jmespath
+ 4. python-dateutil
+ 5. botocore
+ 6. s3transfer
+ 7. boto3
+------------------
 ```
 
 ### 4.2. Успешный запуск (Тестовый режим)
@@ -133,40 +168,55 @@ boto3
 Содержимое `config.yaml`:
 
 ```yaml
-package_name: "PYTEST"
-source_path: "tests/test_repo_stage3.txt"
+package_name: "WEBAPP"
+source_path: "tests/test_repo_stage4.txt"
 test_mode: true
 ascii_tree: true
-max_depth: 4
+max_depth: 6
 filter_substring: ""
+show_load_order: true
 ```
 
-Содержимое `test_repo_stage3.txt`:
+Содержимое `test_repo_stage4.txt`:
 
 ```yaml
-PYTEST: PLUGGY, PACKAGING, COLORAMA
-PLUGGY: PACKAGING
-PACKAGING:
-COLORAMA: URLLIB3
-URLLIB3: CERTIFI
-CERTIFI: URLLIB3
+WEBAPP: FRONTEND, BACKEND
+FRONTEND: REACT
+BACKEND: NODE
+NODE: EXPRESS
+EXPRESS: LOOP_A
+LOOP_A: LOOP_B
+LOOP_B: LOOP_A
 ```
 
 Результат:
 
 ```bash
-Building graph for 'PYTEST' (depth=4)...
+Building graph for 'WEBAPP' (depth=6)...
 
 --- Dependency Tree ---
-PYTEST
-├── PLUGGY
-│   └── PACKAGING (cycle)
-├── PACKAGING
-└── COLORAMA
-    └── URLLIB3
-        └── CERTIFI
-            └── URLLIB3 (cycle)
+WEBAPP
+├── FRONTEND
+│   └── REACT
+└── BACKEND
+    └── NODE
+        └── EXPRESS
+            └── LOOP_A
+                └── LOOP_B
+                    └── LOOP_A (cycle)
 -----------------------
+
+Calculating load order...
+--- Load Order ---
+ 1. REACT
+ 2. FRONTEND
+ 3. LOOP_A (cycle)
+ 4. LOOP_B (cycle)
+ 5. EXPRESS
+ 6. NODE
+ 7. BACKEND
+ 8. WEBAPP
+------------------
 ```
 
 ### 4.3. Обработка ошибок конфигурации
@@ -182,6 +232,7 @@ source_path: "./test_repo.txt"
 test_mode: true
 ascii_tree: false
 max_depth: 5
+show_load_order: true
 ```
 
 Результат:
@@ -201,6 +252,7 @@ test_mode: false
 ascii_tree: false
 max_depth: 5
 filter_substring: "urllib"
+show_load_order: true
 ```
 
 Результат:

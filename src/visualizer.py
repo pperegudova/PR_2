@@ -23,3 +23,12 @@ def format_ascii_tree(tree: dict, pkg_name: str) -> str:
 
     _render(tree.get(pkg_name, {}))
     return "\n".join(lines)
+
+
+def format_load_order(load_order: list) -> str:
+    """Форматирует список порядка загрузки в виде нумерованного списка."""
+    lines = ["--- Load Order ---"]
+    for i, pkg in enumerate(load_order, 1):
+        lines.append(f"{i:2d}. {pkg}")
+    lines.append("------------------")
+    return "\n".join(lines)

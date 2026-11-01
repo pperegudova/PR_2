@@ -7,7 +7,7 @@ import sys
 MIN_DEPTH = 1
 REQUIRED_KEYS = [
     "package_name", "source_path", "test_mode",
-    "ascii_tree", "max_depth", "filter_substring"
+    "ascii_tree", "max_depth", "filter_substring", "show_load_order"
 ]
 
 
@@ -62,3 +62,6 @@ def _validate_types(config: dict) -> None:
 
     if not isinstance(config["filter_substring"], str):
         raise ConfigError("filter_substring must be a string")
+
+    if not isinstance(config["show_load_order"], bool):
+        raise ConfigError("show_load_order must be a boolean")
